@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>夫妻点菜（云端分享版）</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>夫妻点菜</h1>
+    <button id="edit-toggle" type="button">编辑模式</button>
+  </header>
+
+  <section id="toast" class="toast" hidden></section>
+
+  <section class="add-panel">
+    <form id="dish-form" class="dish-form">
+      <input id="dish-name" name="name" placeholder="菜名" required />
+      <select id="category-select" name="category_select" required></select>
+      <input id="category-custom" name="category_custom" placeholder="输入新分类" class="hidden" />
+      <button type="submit">加入菜库</button>
+    </form>
+  </section>
+
+  <main class="layout">
+    <aside id="category-list" class="categories"></aside>
+
+    <section class="dishes">
+      <form id="bulk-edit-form" class="hidden">
+        <div id="edit-list"></div>
+        <div class="bulk-actions">
+          <button id="bulk-save" type="submit">完成编辑并保存</button>
+          <button id="bulk-cancel" type="button">取消</button>
+        </div>
+      </form>
+
+      <div id="dish-list"></div>
+    </section>
+  </main>
+
+  <section class="cart">
+    <div class="cart-head">
+      <h2>购物车</h2>
+      <button id="clear-cart" type="button">清空</button>
+    </div>
+    <div id="cart-list"></div>
+    <div class="cart-actions">
+      <button id="confirm-order" type="button">确认下单</button>
+      <button id="share-link" type="button">生成微信导入链接</button>
+    </div>
+    <textarea id="share-output" readonly placeholder="点击“生成微信导入链接”后显示"></textarea>
+  </section>
+
+  <script src="./app.js"></script>
+</body>
+</html>
