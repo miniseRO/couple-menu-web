@@ -203,6 +203,12 @@ button {
   background: linear-gradient(90deg, #11aa53, #24c06f);
 }
 
+#share-sync-link {
+  border-color: #bcd8f5;
+  background: #eef6ff;
+  color: #146ec6;
+}
+
 #share-output {
   width: 100%;
   margin-top: 10px;

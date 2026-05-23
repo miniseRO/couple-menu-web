@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   const KEY = "couple_menu_pages_v1";
   const DEFAULT_CATEGORY = "家常";
   const SEED_DISHES = [
@@ -9,7 +9,7 @@
     { name: "蒸鱼", category: "海鲜" },
     { name: "腐乳空心菜", category: "素菜" },
     { name: "鸡蛋蒸肉", category: "家常" },
-    { name: "爆炒蛤蜊", category: "海鲜" },
+    { name: "爆炒蛤蜊", category: "海鲜" }
   ];
 
   const state = loadState();
@@ -32,25 +32,43 @@
     clearCart: document.getElementById("clear-cart"),
     confirmOrder: document.getElementById("confirm-order"),
     shareLink: document.getElementById("share-link"),
-    shareOutput: document.getElementById("share-output"),
+    shareSyncLink: document.getElementById("share-sync-link"),
+    importSyncLink: document.getElementById("import-sync-link"),
+    shareOutput: document.getElementById("share-output")
   };
 
   function loadState() {
     try {
       const raw = localStorage.getItem(KEY);
-      if (!raw) return { dishes: [], cart: {}, orders: [] };
+      if (!raw) return { dishes: [], cart: {}, orders: [], meta: { updatedAt: Date.now() } };
       const parsed = JSON.parse(raw);
       return {
         dishes: Array.isArray(parsed.dishes) ? parsed.dishes : [],
         cart: parsed.cart && typeof parsed.cart === "object" ? parsed.cart : {},
         orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+        meta: parsed.meta && typeof parsed.meta === "object"
+          ? { updatedAt: Number(parsed.meta.updatedAt || Date.now()) }
+          : { updatedAt: Date.now() }
       };
     } catch {
-      return { dishes: [], cart: {}, orders: [] };
+      return { dishes: [], cart: {}, orders: [], meta: { updatedAt: Date.now() } };
+    }
+  }
+
+  function touchState() {
+    if (!state.meta || typeof state.meta !== "object") {
+      state.meta = { updatedAt: Date.now() };
+    } else {
+      state.meta.updatedAt = Date.now();
     }
   }
 
   function saveState() {
+    touchState();
+    localStorage.setItem(KEY, JSON.stringify(state));
+  }
+
+  function persistStateWithoutTouch() {
     localStorage.setItem(KEY, JSON.stringify(state));
   }
 
@@ -59,7 +77,7 @@
     state.dishes = SEED_DISHES.map((d, idx) => ({
       id: idx + 1,
       name: d.name,
-      category: d.category,
+      category: d.category
     }));
     state.cart = {};
     if (!Array.isArray(state.orders)) state.orders = [];
@@ -72,7 +90,7 @@
     els.toast.hidden = false;
     setTimeout(() => {
       if (els.toast) els.toast.hidden = true;
-    }, 2000);
+    }, 2200);
   }
 
   function nowISODate() {
@@ -100,12 +118,14 @@
     const categories = allCategories();
     const keep = els.categorySelect.value;
     els.categorySelect.innerHTML = "";
+
     categories.forEach((cat) => {
       const op = document.createElement("option");
       op.value = cat;
       op.textContent = cat;
       els.categorySelect.appendChild(op);
     });
+
     const custom = document.createElement("option");
     custom.value = "__custom__";
     custom.textContent = "+ 新分类";
@@ -142,6 +162,7 @@
     const categories = ["全部", ...allCategories()];
     if (!categories.includes(selectedCategory)) selectedCategory = "全部";
     els.categoryList.innerHTML = "";
+
     categories.forEach((cat) => {
       const b = document.createElement("button");
       b.type = "button";
@@ -176,9 +197,10 @@
     dishes.forEach((d) => {
       const row = document.createElement("article");
       row.className = "dish-row";
+
       const left = document.createElement("div");
       const sales = salesMap[String(d.id)] || 0;
-      left.innerHTML = `<h3 class="dish-name">${escapeHtml(d.name)}</h3><p class="dish-sales">月售${sales}+</p>`;
+      left.innerHTML = `<h3 class=\"dish-name\">${escapeHtml(d.name)}</h3><p class=\"dish-sales\">月售${sales}+</p>`;
 
       const plus = document.createElement("button");
       plus.type = "button";
@@ -195,7 +217,7 @@
   function renderEditList() {
     const dishes = filteredDishes();
     const options = allCategories()
-      .map((c) => `<option value="${escapeAttr(c)}"></option>`)
+      .map((c) => `<option value=\"${escapeAttr(c)}\"></option>`)
       .join("");
 
     els.editList.innerHTML = "";
@@ -203,12 +225,13 @@
       const row = document.createElement("div");
       row.className = "edit-row";
       row.innerHTML = `
-        <div class="edit-grid">
-          <input name="name_${d.id}" value="${escapeAttr(d.name)}" required />
-          <input name="category_${d.id}" value="${escapeAttr(d.category)}" list="edit-cats-${d.id}" required />
-          <datalist id="edit-cats-${d.id}">${options}</datalist>
+        <div class=\"edit-grid\">
+          <input name=\"name_${d.id}\" value=\"${escapeAttr(d.name)}\" required />
+          <input name=\"category_${d.id}\" value=\"${escapeAttr(d.category)}\" list=\"edit-cats-${d.id}\" required />
+          <datalist id=\"edit-cats-${d.id}\">${options}</datalist>
         </div>
       `;
+
       const hidden = document.createElement("input");
       hidden.type = "hidden";
       hidden.name = "dish_ids";
@@ -220,7 +243,7 @@
 
   function addToCart(id, qty) {
     const key = String(id);
-    const next = (Number(state.cart[key] || 0) + qty);
+    const next = Number(state.cart[key] || 0) + qty;
     if (next <= 0) {
       delete state.cart[key];
     } else {
@@ -237,19 +260,22 @@
       els.cartList.textContent = "还没点菜";
       return;
     }
+
     entries.forEach(([id, qty]) => {
       const dish = state.dishes.find((d) => String(d.id) === String(id));
       if (!dish) return;
+
       const row = document.createElement("div");
       row.className = "cart-item";
       row.innerHTML = `
         <span>${escapeHtml(dish.name)}</span>
-        <span class="qty-ops">
-          <button type="button" data-op="minus">-</button>
+        <span class=\"qty-ops\">
+          <button type=\"button\" data-op=\"minus\">-</button>
           <strong>${qty}</strong>
-          <button type="button" data-op="plus">+</button>
+          <button type=\"button\" data-op=\"plus\">+</button>
         </span>
       `;
+
       const buttons = row.querySelectorAll("button");
       buttons[0].addEventListener("click", () => addToCart(id, -1));
       buttons[1].addEventListener("click", () => addToCart(id, 1));
@@ -258,11 +284,11 @@
   }
 
   function normalizeCategoryFromForm(fd) {
-    const sel = String(fd.get("category_select") || "").trim();
-    if (sel === "__custom__") {
+    const selected = String(fd.get("category_select") || "").trim();
+    if (selected === "__custom__") {
       return String(fd.get("category_custom") || "").trim();
     }
-    return sel;
+    return selected;
   }
 
   function createDish(name, category) {
@@ -289,7 +315,9 @@
     const json = JSON.stringify(payload);
     const bytes = new TextEncoder().encode(json);
     let bin = "";
-    bytes.forEach((b) => { bin += String.fromCharCode(b); });
+    bytes.forEach((b) => {
+      bin += String.fromCharCode(b);
+    });
     return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
   }
 
@@ -308,6 +336,7 @@
       notify("购物车为空，无法分享");
       return;
     }
+
     const items = entries
       .map(([id, qty]) => {
         const d = state.dishes.find((x) => String(x.id) === String(id));
@@ -316,26 +345,123 @@
       })
       .filter(Boolean);
 
-    const payload = { v: 1, date: nowISODate(), items };
+    const payload = { type: "cart_import", v: 1, date: nowISODate(), items };
     const encoded = encodePayload(payload);
     const url = new URL(window.location.href);
+    url.searchParams.delete("sync");
     url.searchParams.set("import", encoded);
     url.searchParams.delete("done");
-    els.shareOutput.value = url.toString();
-    navigator.clipboard?.writeText(url.toString()).catch(() => null);
+
+    const out = url.toString();
+    els.shareOutput.value = out;
+    navigator.clipboard?.writeText(out).catch(() => null);
     notify("链接已生成并尝试复制");
   }
 
-  function importFromUrlIfExists() {
+  function exportFullSyncPayload() {
+    return {
+      type: "full_sync",
+      v: 2,
+      updatedAt: Number(state.meta?.updatedAt || Date.now()),
+      exportedAt: Date.now(),
+      data: {
+        dishes: state.dishes,
+        orders: state.orders
+      }
+    };
+  }
+
+  function buildFullSyncLink() {
+    const payload = exportFullSyncPayload();
+    const encoded = encodePayload(payload);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("import");
+    url.searchParams.set("sync", encoded);
+    url.searchParams.delete("done");
+
+    const out = url.toString();
+    els.shareOutput.value = out;
+    navigator.clipboard?.writeText(out).catch(() => null);
+    notify("全量同步链接已生成并尝试复制");
+  }
+
+  function applyFullSyncPayload(payload) {
+    if (!payload || payload.type !== "full_sync" || !payload.data) {
+      throw new Error("bad_sync_payload");
+    }
+
+    const incomingAt = Number(payload.updatedAt || 0);
+    const localAt = Number(state.meta?.updatedAt || 0);
+
+    if (incomingAt <= localAt) {
+      notify("本机数据更新，已忽略旧同步包");
+      return false;
+    }
+
+    const incomingDishes = Array.isArray(payload.data.dishes) ? payload.data.dishes : [];
+    const incomingOrders = Array.isArray(payload.data.orders) ? payload.data.orders : [];
+
+    state.dishes = incomingDishes
+      .map((d) => ({
+        id: Number(d.id || 0),
+        name: String(d.name || "").trim(),
+        category: String(d.category || "").trim() || DEFAULT_CATEGORY
+      }))
+      .filter((d) => d.id > 0 && d.name);
+
+    state.orders = incomingOrders
+      .map((o) => ({
+        date: String(o.date || ""),
+        items: Array.isArray(o.items)
+          ? o.items
+            .map((it) => ({ id: Number(it.id || 0), qty: Number(it.qty || 0) }))
+            .filter((it) => it.id > 0 && it.qty > 0)
+          : []
+      }))
+      .filter((o) => o.date && o.items.length > 0);
+
+    state.cart = {};
+    state.meta = { updatedAt: incomingAt };
+    persistStateWithoutTouch();
+    notify("已同步最新数据");
+    return true;
+  }
+
+  function handleManualSyncImport() {
+    const text = window.prompt("粘贴同步链接或 sync 参数：");
+    if (!text) return;
+
+    let syncToken = "";
+    const value = text.trim();
+
+    try {
+      if (value.startsWith("http://") || value.startsWith("https://")) {
+        const u = new URL(value);
+        syncToken = u.searchParams.get("sync") || "";
+      } else {
+        syncToken = value;
+      }
+
+      if (!syncToken) throw new Error("empty_sync");
+      const payload = decodePayload(syncToken);
+      const changed = applyFullSyncPayload(payload);
+      if (changed) render();
+    } catch {
+      notify("同步链接无效");
+    }
+  }
+
+  function importCartFromUrlIfExists() {
     const url = new URL(window.location.href);
     const raw = url.searchParams.get("import");
     if (!raw) return;
 
     try {
       const payload = decodePayload(raw);
-      if (!payload || !Array.isArray(payload.items)) throw new Error("bad");
+      const items = Array.isArray(payload?.items) ? payload.items : null;
+      if (!items) throw new Error("bad_import");
 
-      payload.items.forEach((it) => {
+      items.forEach((it) => {
         const name = String(it.name || "").trim();
         const category = String(it.category || "").trim() || DEFAULT_CATEGORY;
         const qty = Math.max(1, Number(it.qty || 1));
@@ -347,6 +473,7 @@
           dish = { id: nextId, name, category };
           state.dishes.push(dish);
         }
+
         const key = String(dish.id);
         state.cart[key] = Number(state.cart[key] || 0) + qty;
       });
@@ -358,6 +485,24 @@
       history.replaceState(null, "", url.toString());
     } catch {
       notify("导入链接无效");
+    }
+  }
+
+  function importSyncFromUrlIfExists() {
+    const url = new URL(window.location.href);
+    const raw = url.searchParams.get("sync");
+    if (!raw) return;
+
+    try {
+      const payload = decodePayload(raw);
+      const changed = applyFullSyncPayload(payload);
+      if (changed) {
+        url.searchParams.delete("sync");
+        url.searchParams.set("done", "1");
+        history.replaceState(null, "", url.toString());
+      }
+    } catch {
+      notify("同步链接无效");
     }
   }
 
@@ -373,6 +518,7 @@
       notify("没有可保存项");
       return;
     }
+
     ids.forEach((id) => {
       const name = String(fd.get(`name_${id}`) || "").trim();
       const category = String(fd.get(`category_${id}`) || "").trim();
@@ -382,6 +528,7 @@
       row.name = name;
       row.category = category;
     });
+
     saveState();
     editMode = false;
     els.editToggle.textContent = "编辑模式";
@@ -394,6 +541,7 @@
     toggleCustomCategoryInput();
     renderCategories();
     renderCart();
+
     if (editMode) {
       els.bulkEditForm.classList.remove("hidden");
       els.dishList.classList.add("hidden");
@@ -408,29 +556,38 @@
   function bindEvents() {
     els.categorySelect.addEventListener("change", toggleCustomCategoryInput);
     els.editToggle.addEventListener("click", toggleEditMode);
+
     els.clearCart.addEventListener("click", () => {
       state.cart = {};
       saveState();
       renderCart();
     });
+
     els.confirmOrder.addEventListener("click", confirmOrder);
     els.shareLink.addEventListener("click", buildShareLink);
+    els.shareSyncLink.addEventListener("click", buildFullSyncLink);
+    els.importSyncLink.addEventListener("click", handleManualSyncImport);
+
     els.bulkCancel.addEventListener("click", () => {
       editMode = false;
       els.editToggle.textContent = "编辑模式";
       render();
     });
+
     els.bulkEditForm.addEventListener("submit", (e) => {
       e.preventDefault();
       saveBulkEdits(new FormData(els.bulkEditForm));
     });
+
     els.dishForm.addEventListener("submit", (e) => {
       e.preventDefault();
       const fd = new FormData(els.dishForm);
       const name = String(fd.get("name") || "").trim();
       const category = normalizeCategoryFromForm(fd);
+
       if (!name) return notify("菜名不能为空");
       if (!category) return notify("分类不能为空");
+
       createDish(name, category);
       els.dishName.value = "";
       if (els.categorySelect.value === "__custom__") els.categoryCustom.value = "";
@@ -453,7 +610,8 @@
   }
 
   ensureSeedData();
-  importFromUrlIfExists();
+  importSyncFromUrlIfExists();
+  importCartFromUrlIfExists();
   bindEvents();
   render();
 })();
