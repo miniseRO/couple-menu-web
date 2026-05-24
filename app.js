@@ -374,14 +374,19 @@
       return [String(o.date || ""), items];
     }).filter((o) => o[0] && o[1].length > 0);
 
-    // Compact format (v3):
-    // [type, version, updatedAt, dishes, orders]
+    const cartCompact = Object.entries(state.cart)
+      .map(([id, qty]) => [Number(id), Number(qty)])
+      .filter((it) => it[0] > 0 && it[1] > 0);
+
+    // Compact format (v4):
+    // [type, version, updatedAt, dishes, orders, cart]
     return [
       "s",
-      3,
+      4,
       Number(state.meta?.updatedAt || Date.now()),
       dishesCompact,
-      ordersCompact
+      ordersCompact,
+      cartCompact
     ];
   }
 
@@ -405,9 +410,47 @@
     let incomingAt = 0;
     let incomingDishes = [];
     let incomingOrders = [];
+    let incomingCart = {};
 
-    // Compact payload [\"s\", 3, updatedAt, dishes, orders]
-    if (Array.isArray(payload) && payload[0] === "s" && Number(payload[1]) === 3) {
+    // Compact payload [\"s\", 4, updatedAt, dishes, orders, cart]
+    if (Array.isArray(payload) && payload[0] === "s" && Number(payload[1]) === 4) {
+      incomingAt = Number(payload[2] || 0);
+      const dishesRaw = Array.isArray(payload[3]) ? payload[3] : [];
+      const ordersRaw = Array.isArray(payload[4]) ? payload[4] : [];
+      const cartRaw = Array.isArray(payload[5]) ? payload[5] : [];
+
+      incomingDishes = dishesRaw
+        .map((d) => ({
+          id: Number(Array.isArray(d) ? d[0] : 0),
+          name: String(Array.isArray(d) ? d[1] : "").trim(),
+          category: String(Array.isArray(d) ? d[2] : "").trim() || DEFAULT_CATEGORY
+        }))
+        .filter((d) => d.id > 0 && d.name);
+
+      incomingOrders = ordersRaw
+        .map((o) => {
+          const date = String(Array.isArray(o) ? o[0] : "");
+          const itemsRaw = Array.isArray(o) && Array.isArray(o[1]) ? o[1] : [];
+          const items = itemsRaw
+            .map((it) => ({
+              id: Number(Array.isArray(it) ? it[0] : 0),
+              qty: Number(Array.isArray(it) ? it[1] : 0)
+            }))
+            .filter((it) => it.id > 0 && it.qty > 0);
+          return { date, items };
+        })
+        .filter((o) => o.date && o.items.length > 0);
+
+      incomingCart = {};
+      cartRaw.forEach((it) => {
+        const id = Number(Array.isArray(it) ? it[0] : 0);
+        const qty = Number(Array.isArray(it) ? it[1] : 0);
+        if (id > 0 && qty > 0) {
+          incomingCart[String(id)] = qty;
+        }
+      });
+    } else if (Array.isArray(payload) && payload[0] === "s" && Number(payload[1]) === 3) {
+      // Backward compatibility for old compact payload without cart.
       incomingAt = Number(payload[2] || 0);
       const dishesRaw = Array.isArray(payload[3]) ? payload[3] : [];
       const ordersRaw = Array.isArray(payload[4]) ? payload[4] : [];
@@ -433,6 +476,7 @@
           return { date, items };
         })
         .filter((o) => o.date && o.items.length > 0);
+      incomingCart = {};
     } else if (payload && payload.type === "full_sync" && payload.data) {
       // Backward compatibility with old format
       incomingAt = Number(payload.updatedAt || 0);
@@ -455,6 +499,7 @@
             : []
         }))
         .filter((o) => o.date && o.items.length > 0);
+      incomingCart = {};
     } else {
       throw new Error("bad_sync_payload");
     }
@@ -468,8 +513,7 @@
 
     state.dishes = incomingDishes;
     state.orders = incomingOrders;
-
-    state.cart = {};
+    state.cart = incomingCart;
     state.meta = { updatedAt: incomingAt };
     persistStateWithoutTouch();
     notify("已同步最新数据");
