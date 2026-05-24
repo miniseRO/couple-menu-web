@@ -381,10 +381,10 @@
     const encoded = encodePayload(payload);
     const url = new URL(window.location.href);
     url.searchParams.delete("import");
-    url.searchParams.delete("s");
     url.searchParams.delete("sync");
+    url.searchParams.set("s", encoded);
     url.searchParams.delete("done");
-    url.hash = `s=${encoded}`;
+    url.hash = "";
 
     const out = url.toString();
     navigator.clipboard?.writeText(out).then(
@@ -496,7 +496,9 @@
     const localAt = Number(state.meta?.updatedAt || 0);
 
     if (incomingAt <= localAt) {
-      notify("本机数据更新，已忽略旧同步包");
+      const msg = "已忽略：对方链接数据比你手机当前数据更旧。";
+      notify(msg);
+      window.alert(msg);
       return false;
     }
 
