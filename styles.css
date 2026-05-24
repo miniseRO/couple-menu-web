@@ -209,12 +209,6 @@ button {
   color: #146ec6;
 }
 
-#share-output {
-  width: 100%;
-  margin-top: 10px;
-  min-height: 72px;
-}
-
 @media (max-width: 560px) {
   .dish-form {
     grid-template-columns: 1fr 98px;

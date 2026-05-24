@@ -31,10 +31,7 @@
     cartList: document.getElementById("cart-list"),
     clearCart: document.getElementById("clear-cart"),
     confirmOrder: document.getElementById("confirm-order"),
-    shareLink: document.getElementById("share-link"),
-    shareSyncLink: document.getElementById("share-sync-link"),
-    importSyncLink: document.getElementById("import-sync-link"),
-    shareOutput: document.getElementById("share-output")
+    shareSyncLink: document.getElementById("share-sync-link")
   };
 
   function loadState() {
@@ -330,34 +327,6 @@
     return JSON.parse(json);
   }
 
-  function buildShareLink() {
-    const entries = Object.entries(state.cart);
-    if (!entries.length) {
-      notify("购物车为空，无法分享");
-      return;
-    }
-
-    const items = entries
-      .map(([id, qty]) => {
-        const d = state.dishes.find((x) => String(x.id) === String(id));
-        if (!d) return null;
-        return { name: d.name, category: d.category, qty: Number(qty) };
-      })
-      .filter(Boolean);
-
-    const payload = { type: "cart_import", v: 1, date: nowISODate(), items };
-    const encoded = encodePayload(payload);
-    const url = new URL(window.location.href);
-    url.searchParams.delete("sync");
-    url.searchParams.set("import", encoded);
-    url.searchParams.delete("done");
-
-    const out = url.toString();
-    els.shareOutput.value = out;
-    navigator.clipboard?.writeText(out).catch(() => null);
-    notify("链接已生成并尝试复制");
-  }
-
   function exportFullSyncPayloadCompact() {
     const dishesCompact = state.dishes.map((d) => [
       Number(d.id || 0),
@@ -401,9 +370,12 @@
     url.hash = `s=${encoded}`;
 
     const out = url.toString();
-    els.shareOutput.value = out;
-    navigator.clipboard?.writeText(out).catch(() => null);
-    notify("全量同步链接已生成并尝试复制");
+    navigator.clipboard?.writeText(out).then(
+      () => notify("同步链接已复制"),
+      () => {
+        window.prompt("复制失败，请手动复制：", out);
+      }
+    );
   }
 
   function applyFullSyncPayload(payload) {
@@ -518,34 +490,6 @@
     persistStateWithoutTouch();
     notify("已同步最新数据");
     return true;
-  }
-
-  function handleManualSyncImport() {
-    const text = window.prompt("粘贴同步链接或 sync 参数：");
-    if (!text) return;
-
-    let syncToken = "";
-    const value = text.trim();
-
-    try {
-      if (value.startsWith("http://") || value.startsWith("https://")) {
-        const u = new URL(value);
-        syncToken = u.searchParams.get("s") || u.searchParams.get("sync") || "";
-        if (!syncToken && u.hash) {
-          const hash = u.hash.startsWith("#") ? u.hash.slice(1) : u.hash;
-          if (hash.startsWith("s=")) syncToken = hash.slice(2);
-        }
-      } else {
-        syncToken = value;
-      }
-
-      if (!syncToken) throw new Error("empty_sync");
-      const payload = decodePayload(syncToken);
-      const changed = applyFullSyncPayload(payload);
-      if (changed) render();
-    } catch {
-      notify("同步链接无效");
-    }
   }
 
   function importCartFromUrlIfExists() {
@@ -667,9 +611,7 @@
     });
 
     els.confirmOrder.addEventListener("click", confirmOrder);
-    els.shareLink.addEventListener("click", buildShareLink);
     els.shareSyncLink.addEventListener("click", buildFullSyncLink);
-    els.importSyncLink.addEventListener("click", handleManualSyncImport);
 
     els.bulkCancel.addEventListener("click", () => {
       editMode = false;
