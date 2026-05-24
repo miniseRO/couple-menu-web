@@ -358,26 +358,42 @@
     notify("链接已生成并尝试复制");
   }
 
-  function exportFullSyncPayload() {
-    return {
-      type: "full_sync",
-      v: 2,
-      updatedAt: Number(state.meta?.updatedAt || Date.now()),
-      exportedAt: Date.now(),
-      data: {
-        dishes: state.dishes,
-        orders: state.orders
-      }
-    };
+  function exportFullSyncPayloadCompact() {
+    const dishesCompact = state.dishes.map((d) => [
+      Number(d.id || 0),
+      String(d.name || "").trim(),
+      String(d.category || "").trim() || DEFAULT_CATEGORY
+    ]).filter((d) => d[0] > 0 && d[1]);
+
+    const ordersCompact = state.orders.map((o) => {
+      const items = Array.isArray(o.items)
+        ? o.items
+          .map((it) => [Number(it.id || 0), Number(it.qty || 0)])
+          .filter((it) => it[0] > 0 && it[1] > 0)
+        : [];
+      return [String(o.date || ""), items];
+    }).filter((o) => o[0] && o[1].length > 0);
+
+    // Compact format (v3):
+    // [type, version, updatedAt, dishes, orders]
+    return [
+      "s",
+      3,
+      Number(state.meta?.updatedAt || Date.now()),
+      dishesCompact,
+      ordersCompact
+    ];
   }
 
   function buildFullSyncLink() {
-    const payload = exportFullSyncPayload();
+    const payload = exportFullSyncPayloadCompact();
     const encoded = encodePayload(payload);
     const url = new URL(window.location.href);
     url.searchParams.delete("import");
-    url.searchParams.set("sync", encoded);
+    url.searchParams.delete("s");
+    url.searchParams.delete("sync");
     url.searchParams.delete("done");
+    url.hash = `s=${encoded}`;
 
     const out = url.toString();
     els.shareOutput.value = out;
@@ -386,11 +402,63 @@
   }
 
   function applyFullSyncPayload(payload) {
-    if (!payload || payload.type !== "full_sync" || !payload.data) {
+    let incomingAt = 0;
+    let incomingDishes = [];
+    let incomingOrders = [];
+
+    // Compact payload [\"s\", 3, updatedAt, dishes, orders]
+    if (Array.isArray(payload) && payload[0] === "s" && Number(payload[1]) === 3) {
+      incomingAt = Number(payload[2] || 0);
+      const dishesRaw = Array.isArray(payload[3]) ? payload[3] : [];
+      const ordersRaw = Array.isArray(payload[4]) ? payload[4] : [];
+
+      incomingDishes = dishesRaw
+        .map((d) => ({
+          id: Number(Array.isArray(d) ? d[0] : 0),
+          name: String(Array.isArray(d) ? d[1] : "").trim(),
+          category: String(Array.isArray(d) ? d[2] : "").trim() || DEFAULT_CATEGORY
+        }))
+        .filter((d) => d.id > 0 && d.name);
+
+      incomingOrders = ordersRaw
+        .map((o) => {
+          const date = String(Array.isArray(o) ? o[0] : "");
+          const itemsRaw = Array.isArray(o) && Array.isArray(o[1]) ? o[1] : [];
+          const items = itemsRaw
+            .map((it) => ({
+              id: Number(Array.isArray(it) ? it[0] : 0),
+              qty: Number(Array.isArray(it) ? it[1] : 0)
+            }))
+            .filter((it) => it.id > 0 && it.qty > 0);
+          return { date, items };
+        })
+        .filter((o) => o.date && o.items.length > 0);
+    } else if (payload && payload.type === "full_sync" && payload.data) {
+      // Backward compatibility with old format
+      incomingAt = Number(payload.updatedAt || 0);
+      const dishesRaw = Array.isArray(payload.data.dishes) ? payload.data.dishes : [];
+      const ordersRaw = Array.isArray(payload.data.orders) ? payload.data.orders : [];
+      incomingDishes = dishesRaw
+        .map((d) => ({
+          id: Number(d.id || 0),
+          name: String(d.name || "").trim(),
+          category: String(d.category || "").trim() || DEFAULT_CATEGORY
+        }))
+        .filter((d) => d.id > 0 && d.name);
+      incomingOrders = ordersRaw
+        .map((o) => ({
+          date: String(o.date || ""),
+          items: Array.isArray(o.items)
+            ? o.items
+              .map((it) => ({ id: Number(it.id || 0), qty: Number(it.qty || 0) }))
+              .filter((it) => it.id > 0 && it.qty > 0)
+            : []
+        }))
+        .filter((o) => o.date && o.items.length > 0);
+    } else {
       throw new Error("bad_sync_payload");
     }
 
-    const incomingAt = Number(payload.updatedAt || 0);
     const localAt = Number(state.meta?.updatedAt || 0);
 
     if (incomingAt <= localAt) {
@@ -398,27 +466,8 @@
       return false;
     }
 
-    const incomingDishes = Array.isArray(payload.data.dishes) ? payload.data.dishes : [];
-    const incomingOrders = Array.isArray(payload.data.orders) ? payload.data.orders : [];
-
-    state.dishes = incomingDishes
-      .map((d) => ({
-        id: Number(d.id || 0),
-        name: String(d.name || "").trim(),
-        category: String(d.category || "").trim() || DEFAULT_CATEGORY
-      }))
-      .filter((d) => d.id > 0 && d.name);
-
-    state.orders = incomingOrders
-      .map((o) => ({
-        date: String(o.date || ""),
-        items: Array.isArray(o.items)
-          ? o.items
-            .map((it) => ({ id: Number(it.id || 0), qty: Number(it.qty || 0) }))
-            .filter((it) => it.id > 0 && it.qty > 0)
-          : []
-      }))
-      .filter((o) => o.date && o.items.length > 0);
+    state.dishes = incomingDishes;
+    state.orders = incomingOrders;
 
     state.cart = {};
     state.meta = { updatedAt: incomingAt };
@@ -437,7 +486,11 @@
     try {
       if (value.startsWith("http://") || value.startsWith("https://")) {
         const u = new URL(value);
-        syncToken = u.searchParams.get("sync") || "";
+        syncToken = u.searchParams.get("s") || u.searchParams.get("sync") || "";
+        if (!syncToken && u.hash) {
+          const hash = u.hash.startsWith("#") ? u.hash.slice(1) : u.hash;
+          if (hash.startsWith("s=")) syncToken = hash.slice(2);
+        }
       } else {
         syncToken = value;
       }
@@ -490,14 +543,20 @@
 
   function importSyncFromUrlIfExists() {
     const url = new URL(window.location.href);
-    const raw = url.searchParams.get("sync");
+    let raw = url.searchParams.get("s") || url.searchParams.get("sync");
+    if (!raw && url.hash) {
+      const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+      if (hash.startsWith("s=")) raw = hash.slice(2);
+    }
     if (!raw) return;
 
     try {
       const payload = decodePayload(raw);
       const changed = applyFullSyncPayload(payload);
       if (changed) {
+        url.searchParams.delete("s");
         url.searchParams.delete("sync");
+        url.hash = "";
         url.searchParams.set("done", "1");
         history.replaceState(null, "", url.toString());
       }
