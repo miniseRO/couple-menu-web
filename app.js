@@ -1,15 +1,25 @@
 ﻿(function () {
   const KEY = "couple_menu_pages_v1";
   const DEFAULT_CATEGORY = "家常";
-  const SEED_DISHES = [
-    { name: "西红柿炒鸡蛋", category: "家常" },
-    { name: "蒸排骨", category: "荤菜" },
-    { name: "蚝油生菜", category: "素菜" },
-    { name: "红烧肉", category: "荤菜" },
-    { name: "蒸鱼", category: "海鲜" },
-    { name: "腐乳空心菜", category: "素菜" },
-    { name: "鸡蛋蒸肉", category: "家常" },
-    { name: "爆炒蛤蜊", category: "海鲜" }
+  const DB_BASELINE_VERSION = 20260524;
+  const DB_BASELINE_DISHES = [
+    { id: 6, name: "西红柿炒鸡蛋", category: "素菜" },
+    { id: 8, name: "蒸排骨", category: "猪肉" },
+    { id: 11, name: "肉炒菜心", category: "素菜" },
+    { id: 12, name: "蒸鱼", category: "鱼" },
+    { id: 13, name: "蒸肉饼", category: "猪肉" },
+    { id: 14, name: "鸡蛋蒸肉", category: "猪肉" },
+    { id: 15, name: "盐焗鸡腿", category: "鸡肉" },
+    { id: 16, name: "蒸沙姜鸡", category: "鸡肉" },
+    { id: 17, name: "炒鸡", category: "鸡肉" },
+    { id: 18, name: "红烧豆腐", category: "素菜" },
+    { id: 19, name: "红烧肉", category: "猪肉" },
+    { id: 20, name: "烤鸡翅", category: "鸡肉" },
+    { id: 21, name: "红烧鸡翅", category: "鸡肉" },
+    { id: 22, name: "蚝油生菜", category: "素菜" },
+    { id: 23, name: "腐乳空心菜", category: "素菜" },
+    { id: 24, name: "爆炒蛤蜊", category: "海鲜" },
+    { id: 25, name: "炒小白菜", category: "素菜" }
   ];
 
   const state = loadState();
@@ -70,14 +80,21 @@
   }
 
   function ensureSeedData() {
-    if (Array.isArray(state.dishes) && state.dishes.length > 0) return;
-    state.dishes = SEED_DISHES.map((d, idx) => ({
-      id: idx + 1,
+    const currentVersion = Number(state.meta?.baselineVersion || 0);
+    if (currentVersion === DB_BASELINE_VERSION) return;
+
+    state.dishes = DB_BASELINE_DISHES.map((d) => ({
+      id: Number(d.id),
       name: d.name,
       category: d.category
     }));
+    // 覆盖基线时清理本地购物车/订单，避免旧数据和新菜品映射冲突。
     state.cart = {};
-    if (!Array.isArray(state.orders)) state.orders = [];
+    state.orders = [];
+    if (!state.meta || typeof state.meta !== "object") {
+      state.meta = { updatedAt: Date.now() };
+    }
+    state.meta.baselineVersion = DB_BASELINE_VERSION;
     saveState();
   }
 
