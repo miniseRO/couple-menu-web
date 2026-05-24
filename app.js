@@ -496,7 +496,14 @@
     const localAt = Number(state.meta?.updatedAt || 0);
 
     if (incomingAt <= localAt) {
-      const msg = "已忽略：对方链接数据比你手机当前数据更旧。";
+      const imported = importCartFromIncomingSnapshot(incomingDishes, incomingCart);
+      if (imported > 0) {
+        const msg = `对方数据较旧，已仅导入购物车（${imported} 项）。`;
+        notify(msg);
+        window.alert(msg);
+        return true;
+      }
+      const msg = "已忽略：对方链接数据比你手机当前数据更旧，且无可导入购物车。";
       notify(msg);
       window.alert(msg);
       return false;
@@ -509,6 +516,44 @@
     persistStateWithoutTouch();
     notify("已同步最新数据");
     return true;
+  }
+
+  function importCartFromIncomingSnapshot(incomingDishes, incomingCart) {
+    const incomingDishMap = {};
+    incomingDishes.forEach((d) => {
+      incomingDishMap[String(d.id)] = d;
+    });
+
+    const newCart = {};
+    let importedCount = 0;
+
+    Object.entries(incomingCart || {}).forEach(([incomingId, qtyRaw]) => {
+      const qty = Number(qtyRaw || 0);
+      if (qty <= 0) return;
+
+      const incomingDish = incomingDishMap[String(incomingId)];
+      if (!incomingDish) return;
+
+      const name = String(incomingDish.name || "").trim();
+      const category = String(incomingDish.category || "").trim() || DEFAULT_CATEGORY;
+      if (!name) return;
+
+      let localDish = state.dishes.find((d) => d.name === name && d.category === category);
+      if (!localDish) {
+        const nextId = state.dishes.reduce((m, d) => Math.max(m, Number(d.id || 0)), 0) + 1;
+        localDish = { id: nextId, name, category };
+        state.dishes.push(localDish);
+      }
+
+      newCart[String(localDish.id)] = qty;
+      importedCount += 1;
+    });
+
+    if (importedCount > 0) {
+      state.cart = newCart;
+      saveState();
+    }
+    return importedCount;
   }
 
   function importCartFromUrlIfExists() {
